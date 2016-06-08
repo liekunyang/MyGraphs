@@ -1,13 +1,12 @@
 import os
 import time
 import re
-
-
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib import style
 from collections import *
+
 
 class MyGraphs:
     def __init__(self, datafolder="",
@@ -87,7 +86,7 @@ class MyGraphs:
             "d32dt": "#aa0000",
             "d32dt_d": "#ff5555",
             "d32dt_cd": "#ee0000",
-             "d32dt_cd_chl": "#ee0000",
+            "d32dt_cd_chl": "#ee0000",
             "d32dt_cons": "#FA0000",
             "d40dt": "#C89600",
             "d44dt": "#00FA00",
@@ -152,14 +151,15 @@ class MyGraphs:
             'enrichrate47_chl': '/s/mg chl',
             'enrichrate49_chl': '/s/mg chl',
 
-            'logE47':'',
-            'logE49':''
+            'logE47': '',
+            'logE49': ''
         }
 
         # Clean samples file
         self.sample_list()
 
         # Create master file
+
         self.create_masterdf(derive=derive, denoise=denoise, norm_chl=norm_chl)
 
     def sample_list(self):
@@ -174,9 +174,8 @@ class MyGraphs:
 
             # merge with chlorophyll
             chlorofile = "C:\\Users\\u5040252\\CloudStation\\Projects\\Mass_Spec_Data\\2016\\chlorophylls.csv"
-            chl = pd.read_csv(chlorofile, encoding='ISO-8859-1')[['date', 'samplename','chlorophyll']]
+            chl = pd.read_csv(chlorofile, encoding='ISO-8859-1')[['date', 'samplename', 'chlorophyll']]
             allsamples = allsamples.merge(chl, on=['date', 'samplename'], how='left')
-
 
             # fix datetimes
             for i in range(0, len(allsamples)):
@@ -190,13 +189,11 @@ class MyGraphs:
             allsamples['datafile'] = None
             allsamples = allsamples.drop_duplicates('filename')
 
-
             allsamples['BIC'] = 0
             allsamples['CELLS'] = 0
             allsamples['AZ'] = 0
             allsamples['EZ'] = 0
             allsamples['chloro_ugml'] = 0
-
 
             for s in allsamples.index:
                 # create file paths
@@ -216,20 +213,16 @@ class MyGraphs:
                     data = pd.read_csv(datafilepath, encoding=self.encoding)
 
                     # parse events
-                    for r in data.loc[data.eventtype.notnull(),["time2", "eventtype", "eventdetails"]].iterrows():
+                    for r in data.loc[data.eventtype.notnull(), ["time2", "eventtype", "eventdetails"]].iterrows():
                         r = r[1]
                         if r['eventtype'] in ["BIC", "CELLS", "AZ", "EZ"]:
-                #             print(s, r['eventtype'], re.search("[0-9]+", r["eventdetails"]).group())
+                            #             print(s, r['eventtype'], re.search("[0-9]+", r["eventdetails"]).group())
                             allsamples.at[s, r['eventtype']] = float(re.search("[0-9]+", r["eventdetails"]).group())
-
 
             # calculate final chlorophyll content
             #     print(s, allsamples.at[s,'CELLS'],allsamples.at[s,'cuvette'],allsamples.at[s,'chlorophyll'], )
-            allsamples['chloro_ugml'] = allsamples.CELLS / allsamples.cuvette * allsamples.chlorophyll # µg/mL
-            allsamples.chloro_ugml = allsamples.chloro_ugml.apply(lambda x:round(x, 2))
-
-
-
+            allsamples['chloro_ugml'] = allsamples.CELLS / allsamples.cuvette * allsamples.chlorophyll  # µg/mL
+            allsamples.chloro_ugml = allsamples.chloro_ugml.apply(lambda x: round(x, 2))
 
             # remove samples for which we have no datafile
             self.samples = allsamples.ix[allsamples.datafile.notnull(), :]
@@ -251,7 +244,6 @@ class MyGraphs:
             self.samples = pd.read_csv(self.samplefile_cleaned, encoding=self.encoding)
             self.samples.set_index('samplename', inplace=True)
 
-
     def create_masterdf(self, derive=True, denoise=True, norm_chl=True):
         """
         Create a master dataframe which contains all the data from that day and
@@ -270,37 +262,37 @@ class MyGraphs:
                     # if os.path.getsize(self.samples.ix[s, 'datafile']) >= 10000000:
                     #     print("File ", self.samples.ix[s, 'datafile'], " is more than 10 Mo... Excluding it")
                     # else:
-                        self.dfs[s] = pd.read_csv(self.samples.ix[s, 'datafile'], encoding=self.encoding)
-                        self.dfs[s]['echant'] = s
+                    self.dfs[s] = pd.read_csv(self.samples.ix[s, 'datafile'], encoding=self.encoding)
+                    self.dfs[s]['echant'] = s
 
-                        self.timecol = 'time2' if 'time2' in self.dfs[s].columns else 'time'
+                    self.timecol = 'time2' if 'time2' in self.dfs[s].columns else 'time'
 
-                        # remove first data point which can cause problems sometimes
-                        self.dfs[s] = self.dfs[s].ix[1:, :]
-                        self.dfs[s].reset_index(inplace=True, drop=True)
+                    # remove first data point which can cause problems sometimes
+                    self.dfs[s] = self.dfs[s].ix[1:, :]
+                    self.dfs[s].reset_index(inplace=True, drop=True)
 
-                        if 'O2evol' in self.dfs[s].columns:
-                            self.dfs[s] = self.dfs[s].rename(columns={'O2evol': 'd32dt'})
+                    if 'O2evol' in self.dfs[s].columns:
+                        self.dfs[s] = self.dfs[s].rename(columns={'O2evol': 'd32dt'})
 
-                        # (re)calculate all the derivatives if necessary using time2, self.window and a rolling linear regression
-                        if derive:
-                            self.dfs[s] = self.derive(self.dfs[s])
+                    # (re)calculate all the derivatives if necessary using time2, self.window and a rolling linear regression
+                    if derive:
+                        self.dfs[s] = self.derive(self.dfs[s])
 
-                        # denoising
-                        if denoise:
-                            self.dfs[s] = self.denoise_data(s)
+                    # denoising
+                    if denoise:
+                        self.dfs[s] = self.denoise_data(s)
 
-                        if norm_chl and 'CELLS' in set(self.dfs[s].eventtype):
-                            self.normalize_chlorophyll(s)
-                        # save modified file
-                        self.dfs[s].to_csv(self.samples.ix[s, 'datafile'], index=False, encoding=self.encoding)
+                    if norm_chl and 'CELLS' in set(self.dfs[s].eventtype):
+                        self.normalize_chlorophyll(s)
+                    # save modified file
+                    self.dfs[s].to_csv(self.samples.ix[s, 'datafile'], index=False, encoding=self.encoding)
 
-                        # concat dataframes
-                        masterdf = pd.concat([masterdf, self.dfs[s]])
+                    # concat dataframes
+                    masterdf = pd.concat([masterdf, self.dfs[s]])
 
                 # save master dataframe in folder
                 self.masterdf = masterdf.sort_values(by=['echant', 'time'], ascending=[True, True])
-                self.masterdf.to_csv(self.masterfile,  compression='gzip', index=False, encoding=self.encoding)
+                self.masterdf.to_csv(self.masterfile, compression='gzip', index=False, encoding=self.encoding)
                 self.log("MASTER file", "Created " + self.masterfile)
                 masterdf = None
 
@@ -357,10 +349,12 @@ class MyGraphs:
 
     def consumption_params(self, s, limit=7200):
         # denoising variables
-        self.reffiles = {600: "C:\\Users\\u5040252\\Cloudstation\\Projects\\Mass_Spec_Data\\2016\\20160331\\rawdata\\20160331_cons600_4.csv",
-                         2000: "C:\\Users\\u5040252\\Cloudstation\\Projects\\Mass_Spec_Data\\2016\\20160204\\20160204_cons2000.csv"}
+        self.reffiles = {
+            600: "C:\\Users\\u5040252\\Cloudstation\\Projects\\Mass_Spec_Data\\2016\\20160331\\rawdata\\20160331_cons600_4.csv",
+            2000: "C:\\Users\\u5040252\\Cloudstation\\Projects\\Mass_Spec_Data\\2016\\20160204\\20160204_cons2000.csv"}
 
-        self.paramfile = "\\".join(self.reffiles[int(self.samples.at[s, 'cuvette'])].split("\\")[:-1]) + "\\parameters.txt"
+        self.paramfile = "\\".join(
+            self.reffiles[int(self.samples.at[s, 'cuvette'])].split("\\")[:-1]) + "\\parameters.txt"
 
         if os.path.isfile(self.paramfile):
             with open(self.paramfile, "r") as f:
@@ -369,7 +363,8 @@ class MyGraphs:
                 return f32, f40
 
         else:
-            df = pd.read_csv(self.reffiles[int(self.samples.at[s, 'cuvette'])], encoding='ISO-8859-1')[['time', 'Mass32', 'Mass40']]
+            df = pd.read_csv(self.reffiles[int(self.samples.at[s, 'cuvette'])], encoding='ISO-8859-1')[
+                ['time', 'Mass32', 'Mass40']]
 
             if df.time.max() > limit:
                 df = df.loc[df.time < limit, :]
@@ -391,16 +386,16 @@ class MyGraphs:
 
     def get_consumption_params(self, s):
         if 'cons32' in self.samples.columns and \
-            self.samples.at[s, 'cons32'] is not None and \
-            self.samples.at[s, 'cons32'] != 0:
+                        self.samples.at[s, 'cons32'] is not None and \
+                        self.samples.at[s, 'cons32'] != 0:
 
             f32 = self.samples.at[s, 'cons32']
         else:
             f32 = 0
 
         if 'cons40' in self.samples.columns and \
-            self.samples.at[s, 'cons40'] is not None and \
-            self.samples.at[s, 'cons40'] != 0:
+                        self.samples.at[s, 'cons40'] is not None and \
+                        self.samples.at[s, 'cons40'] != 0:
 
             f40 = self.samples.at[s, 'cons40']
         else:
@@ -432,13 +427,12 @@ class MyGraphs:
                     df['d32dt_c'] = f32 * df.Mass32
                     df['d32dt_cd'] = df.d32dt_d - df.d32dt_c
 
-
         # df.loc[:, 'dtotalCO2dt_d'] = df.d44dt_d + df.d45dt_d + df.d46dt_d + df.d47dt_d + df.d49dt_d
 
         df['logE47'] = (
-        np.log10(100 * df.Mass47 / (df.Mass45 + df.Mass47 + df.Mass49))).apply(self.myround)
+            np.log10(100 * df.Mass47 / (df.Mass45 + df.Mass47 + df.Mass49))).apply(self.myround)
         df['logE49'] = (
-        np.log10(100 * df.Mass49 / (df.Mass45 + df.Mass47 + df.Mass49))).apply(self.myround)
+            np.log10(100 * df.Mass49 / (df.Mass45 + df.Mass47 + df.Mass49))).apply(self.myround)
         df['enrichrate47'] = self.rolling_linear_reg(df[self.timecol], df.logE47)  # (per second)
         df['enrichrate47'] = df['enrichrate47'].apply(self.myround)
         df['enrichrate49'] = self.rolling_linear_reg(df[self.timecol], df.logE49)  # (per second)
@@ -446,18 +440,18 @@ class MyGraphs:
         return df
 
     def normalize_chlorophyll(self, s):
-        chl = self.samples.at[s, 'chloro_ugml'] if self.samples.at[s, 'chloro_ugml'] != 0 else 1000 # µg
+        chl = self.samples.at[s, 'chloro_ugml'] if self.samples.at[s, 'chloro_ugml'] != 0 else 1000  # µg
 
-        for i in ['d32dt', 'd32dt_d', 'd32dt_cd', 'd44dt', 'd45dt', 'd46dt', 'd47dt', 'd49dt', 'dtotalCO2dt','enrichrate47']:
+        for i in ['d32dt', 'd32dt_d', 'd32dt_cd', 'd44dt', 'd45dt', 'd46dt', 'd47dt', 'd49dt', 'dtotalCO2dt',
+                  'enrichrate47']:
             self.dfs[s][i + "_chl"] = self.dfs[s][i] / chl
 
-        #for enrichment rate, we have to substract non catalytic first
+        # for enrichment rate, we have to substract non catalytic first
         for i in ['enrichrate49']:
-            cells_inj = self.dfs[s].loc[self.dfs[s].eventtype=='CELLS' ,'time'].values[0]
-            nc = self.dfs[s].loc[(self.dfs[s].time >= (cells_inj-10)) & (self.dfs[s].time< cells_inj-3), i].mean()
-            self.dfs[s][i + "_chl"] = (self.dfs[s][i] - nc)/chl
+            cells_inj = self.dfs[s].loc[self.dfs[s].eventtype == 'CELLS', 'time'].values[0]
+            nc = self.dfs[s].loc[(self.dfs[s].time >= (cells_inj - 10)) & (self.dfs[s].time < cells_inj - 3), i].mean()
+            self.dfs[s][i + "_chl"] = (self.dfs[s][i] - nc) / chl
             print(s, i, 'NC=', nc)
-
 
     def align_event(self, df, event):
         """
@@ -471,7 +465,6 @@ class MyGraphs:
                      "LIGHT ON": 350,
                      "LIGHT OFF": 600}
 
-
         if 'time2' in df.columns:
             timecol = 'time2'
         else:
@@ -480,7 +473,7 @@ class MyGraphs:
         for s in set(df.loc[df.eventtype == event, 'echant']):
             shift = df.loc[(df.echant == s) & (df.eventtype == event), timecol].values[0] - aligntime[event]
             df.loc[(df.echant == s), 'time3'] = df.loc[(df.echant == s), timecol] - shift
-            df.loc[:,'time3'] = df.time3.apply(lambda x: round(x, 1))
+            df.loc[:, 'time3'] = df.time3.apply(lambda x: round(x, 1))
 
         return df
 
@@ -545,12 +538,12 @@ class MyGraphs:
                     for s in which:
                         if w in self.dfs[s].columns:
                             tmp = self.dfs[s].loc[
-                              (self.dfs[s][self.timecol] > subset_limits[0]) & (self.dfs[s][self.timecol] < subset_limits[1]), :]
+                                  (self.dfs[s][self.timecol] > subset_limits[0]) & (
+                                  self.dfs[s][self.timecol] < subset_limits[1]), :]
                             ymin = min(ymin, tmp[w].min())
                 self.ymin_graph = 0.9 * ymin if ymin > 0 else 1.1 * ymin
             else:
                 self.ymin_graph = self.ymin
-
 
             if self.ymax == None:
                 ymax = -100000
@@ -558,16 +551,16 @@ class MyGraphs:
                     for s in which:
                         if w in self.dfs[s].columns:
                             tmp = self.dfs[s].loc[
-                              (self.dfs[s][self.timecol] > subset_limits[0]) & (self.dfs[s][self.timecol] < subset_limits[1]), :]
-                            ymax =max(ymax, tmp[w].max())
+                                  (self.dfs[s][self.timecol] > subset_limits[0]) & (
+                                  self.dfs[s][self.timecol] < subset_limits[1]), :]
+                            ymax = max(ymax, tmp[w].max())
                 self.ymax_graph = 1.1 * ymax if ymax > 0 else 0.9 * ymax
             else:
                 self.ymax_graph = self.ymax
 
-
             for w in what:
                 if w in data.columns:
-                     # annotate
+                    # annotate
                     if self.annotate:
                         t = data.loc[
                             data.eventtype.notnull(), [self.timecol, 'eventtype', 'eventdetails', 'echant']]
@@ -580,42 +573,37 @@ class MyGraphs:
                             # highlight light event
                             if 'LIGHT ON' in t.eventtype.tolist() and 'LIGHT OFF' in t.eventtype.tolist():
                                 plt.axvspan(t.loc[t.eventtype == 'LIGHT ON', [self.timecol]].values[0],
-                                            t.loc[t.eventtype == 'LIGHT OFF', [self.timecol]].values[0], color='#ffffee', alpha=0.025)
+                                            t.loc[t.eventtype == 'LIGHT OFF', [self.timecol]].values[0],
+                                            color='#ffffee', alpha=0.025)
 
                     # create plot
                     ax = data.set_index('time3').groupby(['echant'])[w].plot(lw=int(self.linewidth), label=str(w))
-
-
-
 
             # labels
             if self.title: plt.title(what[0])
             if self.xlabel: plt.xlabel('Time (s)')
             if self.ylabel: plt.ylabel("".join([what[0], "(", self.units[what[0]], ")"]))
 
-
             if self.legend:
-                            # determine legend position
+                # determine legend position
                 legend_pos = {'logE49': 1,
-                               'enrichrate49_chl':4,
-                               'enrichrate49':4,
-                               'd32dt_cd':2,
-                               'd32dt_cd_chl':2,
-                               'd45dt':3,
-                               'd45dt_chl':3,
-                               'd49dt':3,
-                               'd49dt_chl':3,
-                               }
+                              'enrichrate49_chl': 4,
+                              'enrichrate49': 4,
+                              'd32dt_cd': 2,
+                              'd32dt_cd_chl': 2,
+                              'd45dt': 3,
+                              'd45dt_chl': 3,
+                              'd49dt': 3,
+                              'd49dt_chl': 3,
+                              }
                 if what[0] in legend_pos.keys():
                     self.legend_pos = legend_pos[what[0]]
                 else:
-                    self.legend_pos=0
-                plt.legend(loc=self.legend_pos) # 0=best, 1=top right 2: top left, 3=bot left, 4=bot right
+                    self.legend_pos = 0
+                plt.legend(loc=self.legend_pos)  # 0=best, 1=top right 2: top left, 3=bot left, 4=bot right
 
             plt.axhline(0, color='k')
-            plt.ylim(self.ymin_graph,  self.ymax_graph)
-
-
+            plt.ylim(self.ymin_graph, self.ymax_graph)
 
             # savefile
             plt.savefig(os.path.join(outputfolder, self.day + '_' + "-".join(which) + "." + self.figformat),
@@ -624,7 +612,6 @@ class MyGraphs:
             # close figure
             plt.close("all")
             self.log("figure", "compiled | sample:  " + "-".join(which) + ", masses: " + "-".join(what))
-
 
     def individual_graphs(self, what, ext=None, show_noisy=False, show_denoised=True):
         """ Generate graphs for each sample
@@ -664,7 +651,6 @@ class MyGraphs:
             print("  ", str(s), str(what))
             self.generate_plot(outputfolder, s, what, show_noisy, show_denoised)
 
-
     def generate_plot(self, outputfolder, s, what, show_noisy=False, show_denoised=True):
         if not os.path.isfile(os.path.join(outputfolder, self.day + '_' + str(s) + "." + self.figformat)):
             self.timecol = 'time2' if 'time2' in self.dfs[s].columns else 'time'
@@ -674,28 +660,26 @@ class MyGraphs:
             ax = defaultdict(object)
             subset_limits = (100, 1200)
 
-
-
-
             if self.ymin == None:
                 ymin = 100000
                 for i, w in enumerate(what):
                     if w in self.dfs[s].columns:
                         tmp = self.dfs[s].loc[
-                          (self.dfs[s][self.timecol] > subset_limits[0]) & (self.dfs[s][self.timecol] < subset_limits[1]), :]
+                              (self.dfs[s][self.timecol] > subset_limits[0]) & (
+                              self.dfs[s][self.timecol] < subset_limits[1]), :]
                         ymin = min(ymin, tmp[w].min())
                 self.ymin_graph = 0.9 * ymin if ymin > 0 else 1.1 * ymin
             else:
                 self.ymin_graph = self.ymin
-
 
             if self.ymax == None:
                 ymax = -100000
                 for i, w in enumerate(what):
                     if w in self.dfs[s].columns:
                         tmp = self.dfs[s].loc[
-                          (self.dfs[s][self.timecol] > subset_limits[0]) & (self.dfs[s][self.timecol] < subset_limits[1]), :]
-                        ymax =max(ymax, tmp[w].max())
+                              (self.dfs[s][self.timecol] > subset_limits[0]) & (
+                              self.dfs[s][self.timecol] < subset_limits[1]), :]
+                        ymax = max(ymax, tmp[w].max())
                 self.ymax_graph = 1.1 * ymax if ymax > 0 else 0.9 * ymax
             else:
                 self.ymax_graph = self.ymax
@@ -703,25 +687,26 @@ class MyGraphs:
             for i, w in enumerate(what):
                 if w in self.dfs[s].columns:
                     tmp = self.dfs[s].loc[
-                          (self.dfs[s][self.timecol] > subset_limits[0]) & (self.dfs[s][self.timecol] < subset_limits[1]), :]
+                          (self.dfs[s][self.timecol] > subset_limits[0]) & (
+                          self.dfs[s][self.timecol] < subset_limits[1]), :]
 
                 # create plot
                 ax[w] = self.dfs[s].set_index(self.timecol)[w].plot(lw=self.linewidth,
-                                                               c=self.curveColors[w],
-                                                               ls='-',
-                                                               alpha=1.0,
-                                                               label=str(w))
+                                                                    c=self.curveColors[w],
+                                                                    ls='-',
+                                                                    alpha=1.0,
+                                                                    label=str(w))
 
                 if w in self.dfs[s].columns and len(what) == 1 and show_noisy:
                     ax[w] = self.dfs[s].set_index(self.timecol)[w].plot(lw=self.linewidth,
-                                                                   c=self.curveColors[w],
-                                                                   ls='-',
-                                                                   alpha=0.3,
-                                                                   label=str(w))
+                                                                        c=self.curveColors[w],
+                                                                        ls='-',
+                                                                        alpha=0.3,
+                                                                        label=str(w))
 
                 # annotate
                 if self.annotate:
-                    if i == len(what)-1:
+                    if i == len(what) - 1:
                         t = self.dfs[s].loc[
                             self.dfs[s].eventtype.notnull(), [self.timecol, 'eventtype', 'eventdetails', 'echant']]
                         for e in t[self.timecol]:
@@ -742,7 +727,8 @@ class MyGraphs:
                         # highlight light event
                         if 'LIGHT ON' in t.eventtype.tolist() and 'LIGHT OFF' in t.eventtype.tolist():
                             plt.axvspan(t.loc[t.eventtype == 'LIGHT ON', [self.timecol]].values[0],
-                                        t.loc[t.eventtype == 'LIGHT OFF', [self.timecol]].values[0], color='yellow', alpha=0.025)
+                                        t.loc[t.eventtype == 'LIGHT OFF', [self.timecol]].values[0], color='yellow',
+                                        alpha=0.025)
 
             # plt.legend(True)
             plt.axhline(0, color='k')
@@ -760,7 +746,7 @@ class MyGraphs:
             if self.ylabel:
                 ylab = []
                 for c in what:
-                    if c in ["Mass44","Mass45","Mass47","Mass49","Mass46","Mass32","totalCO2"]:
+                    if c in ["Mass44", "Mass45", "Mass47", "Mass49", "Mass46", "Mass32", "totalCO2"]:
                         ylab.append("[%s] (µM)" % c.strip("Mass"))
                     elif c in ["d44dt", "d44dt_d",
                                "d45dt", "d45dt_d",
@@ -771,15 +757,15 @@ class MyGraphs:
                                "d32dt", "d32dt_d", "d32dt_cd",
                                "d44dt_d", "d44dt_d", "d44dt_d"]:
                         ylab.append("%s (µmol/L/s)" % c)
-                    elif c in ["enrichrate47","enrichrate49"]:
+                    elif c in ["enrichrate47", "enrichrate49"]:
                         ylab.append("%s (s-1)" % c)
-                    elif c in ["logE47","logE49"]:
+                    elif c in ["logE47", "logE49"]:
                         ylab.append(c)
 
                 plt.ylabel(", ".join(ylab))
 
             if self.legend:
-                plt.legend(loc=self.legend_pos)  # 1=bot left, 2=top left, 3=top right, 4=bot right
+                plt.legend(loc=0)  # 1=bot left, 2=top left, 3=top right, 4=bot right
 
             # savefile
             plt.savefig(os.path.join(outputfolder, self.day + '_' + str(s) + "." + self.figformat), dpi=self.dpi)
@@ -790,7 +776,6 @@ class MyGraphs:
 
     def flux(self, where="LIGHT ON"):
 
-
         cols = ['sample', 'chl_i[µg/mL]', 'cells_vol[µL]', 'chl_f[mg/L]',
                 'before49', 'after49', 'm49totCO2',
                 'before45', 'after45', 'm45totCO2',
@@ -799,7 +784,6 @@ class MyGraphs:
                 'GCU_h_mg', 'GCE_h_mg', 'NCU_h_mg', 'GBU_h_mg']
 
         fluxes = pd.DataFrame(data=np.zeros((0, len(cols))), columns=cols)
-
         outputfolder = os.path.join(self.datafolder, self.day, "results", "flux")
         if not os.path.isdir(outputfolder):
             os.makedirs(outputfolder)
@@ -826,7 +810,6 @@ class MyGraphs:
                 else:
                     self.timecol = 'time'
 
-
                 t = tmp.loc[tmp.eventtype == where, self.timecol].values[0]
 
                 if where == "LIGHT ON":
@@ -835,7 +818,6 @@ class MyGraphs:
                 else:
                     lon, loff = t, t + 100
                     fluxfile = os.path.join(outputfolder, self.day + "_fluxes_" + where + ".csv")
-
 
                 # before light was on:
                 before45 = tmp.loc[(tmp[self.timecol] > (lon - 20)) & (tmp[self.timecol] < (lon - 10)), 'd45dt'].mean()
@@ -848,9 +830,11 @@ class MyGraphs:
                 peak49 = tmp.loc[(tmp[self.timecol] > lon) & (tmp[self.timecol] < loff), 'd49dt'].min()
 
                 # CO2 ratios
-                m45totco2 = tmp.loc[tmp.eventtype == where, 'Mass45'].values[0] / tmp.loc[tmp.eventtype == where, 'totalCO2'].values[0]
+                m45totco2 = tmp.loc[tmp.eventtype == where, 'Mass45'].values[0] / \
+                            tmp.loc[tmp.eventtype == where, 'totalCO2'].values[0]
                 # m47totco2 = tmp.loc[tmp[self.timecol] == lon,'Mass47'].values[0] / tmp.loc[tmp[self.timecol] == lon, 'totalCO2'].values[0]
-                m49totco2 = tmp.loc[tmp.eventtype == where, 'Mass49'].values[0] / tmp.loc[tmp.eventtype == where, 'totalCO2'].values[0]
+                m49totco2 = tmp.loc[tmp.eventtype == where, 'Mass49'].values[0] / \
+                            tmp.loc[tmp.eventtype == where, 'totalCO2'].values[0]
 
                 # find volume of cells injected
                 if 'CELLS' in tmp.eventtype.tolist():
@@ -872,7 +856,6 @@ class MyGraphs:
                 chl_mg_l = float(self.samples.at[s, 'chloro_ugml'])
                 chl_mg_l = 1 if chl_mg_l == 0 else chl_mg_l
 
-
                 # Gross CO2 uptake (GCU)
                 gcu = abs((peak49 - before49) / m49totco2)  # µmol.sec-1
                 gcu_h_mg = (gcu * 3600) / chl_mg_l
@@ -882,8 +865,9 @@ class MyGraphs:
                 gce_h_mg = (gce * 3600) / chl_mg_l
 
                 # net Ci uptake (NCU)
-                ncu = abs(tmp.loc[(tmp[self.timecol] >= (loff - 20)) & (tmp[self.timecol] <= (loff - 10)), 'd32dt'].mean() -
-                          tmp.loc[(tmp[self.timecol] >= (lon - 20)) & (tmp[self.timecol] <= (lon - 10)), 'd32dt'].mean())
+                ncu = abs(
+                    tmp.loc[(tmp[self.timecol] >= (loff - 20)) & (tmp[self.timecol] <= (loff - 10)), 'd32dt'].mean() -
+                    tmp.loc[(tmp[self.timecol] >= (lon - 20)) & (tmp[self.timecol] <= (lon - 10)), 'd32dt'].mean())
                 ncu_h_mg = (ncu * 3600) / chl_mg_l
 
                 # Gross bicarbonate uptake (GBU)
@@ -894,21 +878,13 @@ class MyGraphs:
                                                  before49, peak49, m49totco2,
                                                  before45, peak45, m45totco2,
                                                  tmp.loc[(tmp[self.timecol] >= (loff - 20)) & (
-                                                 tmp[self.timecol] <= (loff - 10)), 'd32dt'].mean(),
+                                                     tmp[self.timecol] <= (loff - 10)), 'd32dt'].mean(),
                                                  tmp.loc[
-                                                     (tmp[self.timecol] >= (lon - 20)) & (tmp[self.timecol] <= (lon - 10)), 'd32dt'].mean(),
+                                                     (tmp[self.timecol] >= (lon - 20)) & (
+                                                     tmp[self.timecol] <= (lon - 10)), 'd32dt'].mean(),
                                                  gcu, gce, ncu, gbu,
                                                  gcu_h_mg, gce_h_mg, ncu_h_mg, gbu_h_mg]
 
                 fluxes.to_csv(fluxfile, encoding=self.encoding, index=False)
 
         self.log("flux", "file:  " + os.path.join(outputfolder, self.day + "_fluxes_" + where + ".csv"))
-
-
-
-
-
-
-
-
-
