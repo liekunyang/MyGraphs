@@ -54,7 +54,7 @@ class MyGraphs:
         # initialize graphics
         self.dpi = 600  # figure resolution
         self.figformat = 'jpg'  # figure extension
-        self.linewidth = 2.0
+        self.linewidth = 1.2
         self.figWidth = 20
         self.figHeight = 12
         self.annotate = True
@@ -263,10 +263,8 @@ class MyGraphs:
         """
         if len(self.samples.index) > 0:
             if (not os.path.isfile(self.masterfile)) or derive or denoise or norm_chl:
-                if (not os.path.isfile(self.masterfile)):
-                     masterdf = pd.DataFrame()
-                else:
-                     masterdf = pd.read_csv(self.masterfile,  compression='gzip', encoding=self.encoding)
+
+                masterdf = pd.DataFrame()
 
                 for s in self.samples.index:
                     # if os.path.getsize(self.samples.ix[s, 'datafile']) >= 10000000:
@@ -341,6 +339,11 @@ class MyGraphs:
         df.loc[:, 'enrichrate49'] = self.rolling_linear_reg(df[self.timecol], df.logE49)  # (per second)
 
         return df
+
+    def numpy_rolling_window(self, a):
+        shape = a.shape[:-1] + (a.shape[-1] - self.window + 1, self.window)
+        strides = a.strides + (a.strides[-1],)
+        return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
     def rolling_linear_reg(self, x, y):
         r = np.zeros(len(x))
@@ -443,7 +446,7 @@ class MyGraphs:
         return df
 
     def normalize_chlorophyll(self, s):
-        chl = self.samples.at[s, 'chloro_ugml'] if self.samples.at[s, 'chloro_ugml'] != 0 else 1 # µg
+        chl = self.samples.at[s, 'chloro_ugml'] if self.samples.at[s, 'chloro_ugml'] != 0 else 1000 # µg
 
         for i in ['d32dt', 'd32dt_d', 'd32dt_cd', 'd44dt', 'd45dt', 'd46dt', 'd47dt', 'd49dt', 'dtotalCO2dt','enrichrate47']:
             self.dfs[s][i + "_chl"] = self.dfs[s][i] / chl
@@ -583,11 +586,31 @@ class MyGraphs:
                     ax = data.set_index('time3').groupby(['echant'])[w].plot(lw=int(self.linewidth), label=str(w))
 
 
+
+
             # labels
             if self.title: plt.title(what[0])
             if self.xlabel: plt.xlabel('Time (s)')
             if self.ylabel: plt.ylabel("".join([what[0], "(", self.units[what[0]], ")"]))
-            if self.legend: plt.legend(loc=3)
+
+
+            if self.legend:
+                            # determine legend position
+                legend_pos = {'logE49': 1,
+                               'enrichrate49_chl':4,
+                               'enrichrate49':4,
+                               'd32dt_cd':2,
+                               'd32dt_cd_chl':2,
+                               'd45dt':3,
+                               'd45dt_chl':3,
+                               'd49dt':3,
+                               'd49dt_chl':3,
+                               }
+                if what[0] in legend_pos.keys():
+                    self.legend_pos = legend_pos[what[0]]
+                else:
+                    self.legend_pos=0
+                plt.legend(loc=self.legend_pos) # 0=best, 1=top right 2: top left, 3=bot left, 4=bot right
 
             plt.axhline(0, color='k')
             plt.ylim(self.ymin_graph,  self.ymax_graph)
@@ -756,7 +779,7 @@ class MyGraphs:
                 plt.ylabel(", ".join(ylab))
 
             if self.legend:
-                plt.legend(loc=4)  # 1=bot left, 2=top left, 3=top right, 4=bot right
+                plt.legend(loc=self.legend_pos)  # 1=bot left, 2=top left, 3=top right, 4=bot right
 
             # savefile
             plt.savefig(os.path.join(outputfolder, self.day + '_' + str(s) + "." + self.figformat), dpi=self.dpi)
@@ -777,7 +800,7 @@ class MyGraphs:
 
         fluxes = pd.DataFrame(data=np.zeros((0, len(cols))), columns=cols)
 
-        outputfolder = os.path.join(self.datafolder, self.day, "flux")
+        outputfolder = os.path.join(self.datafolder, self.day, "results", "flux")
         if not os.path.isdir(outputfolder):
             os.makedirs(outputfolder)
 
