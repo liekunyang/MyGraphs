@@ -17,38 +17,18 @@ class MyGraphs:
                  denoise=True,
                  derive=True,
                  norm_chl=True):
-        # rawdatafile encoding
-        self.encoding = 'ISO-8859-1'
 
-        # variables
+
         self.datafolder = datafolder
         self.day = day
-        self.precision = 8
-        self.timecol = 'time'
-
-        # dataframes and dict of dataframes
-        self.masterdf = pd.DataFrame()
-        self.dfs = {}
-
-        self.style = 'vc'
+        self.which = which
         self.window = window
         self.cuvette = cuvette
 
-        historycols = ['timestamp', 'event', 'comments']
-        self.history = pd.DataFrame(data=np.zeros((0, len(historycols))), columns=historycols)
-        self.history.append([time.time(), "start", ""])
-
-        # which graphs to superimpose in compiled graphs ?
-        self.which = which
-
-        # files and folders
-        self.samples_file = os.path.join(self.datafolder, self.day, self.day + "_SAMPLES.csv")
-        self.figures_individual_folder = os.path.join(self.datafolder, self.day, "figures", "individual")
-        self.figures_compiled_folder = os.path.join(self.datafolder, self.day, "figures", "compiled")
-        self.masterfile = os.path.join(self.datafolder, self.day, "_" + self.day + "_MASTER.csv")
-        self.summaryfile = os.path.join(self.datafolder, self.day, "_" + self.day + "_SUMMARY.csv")
-        self.samplefile_cleaned = os.path.join(self.datafolder, self.day, "_" + self.day + "_SAMPLE_cleaned.csv")
-        self.logfile = os.path.join(self.datafolder, self.day, "_" + self.day + "_log.csv")
+        # rawdatafile encoding
+        self.encoding = 'ISO-8859-1'
+        self.precision = 8
+        self.timecol = 'time'
 
         # initialize graphics
         self.dpi = 600  # figure resolution
@@ -62,6 +42,35 @@ class MyGraphs:
         self.title = True
         self.xlabel = True
         self.ylabel = True
+        self.style = 'vc'
+
+        # dataframes and dict of dataframes
+        self.masterdf = pd.DataFrame()
+        self.dfs = {}
+        self.extracted_values = pd.DataFrame(columns=['sample',
+                                                        'nc',
+                                                        'inj_peak',
+                                                        'dark1_steady',
+                                                        'light_high',
+                                                        'light_low',
+                                                        'light_steady',
+                                                        'dark2_high',
+                                                        'dark2_low'])
+
+
+        historycols = ['timestamp', 'event', 'comments']
+        self.history = pd.DataFrame(data=np.zeros((0, len(historycols))), columns=historycols)
+        self.history.append([time.time(), "start", ""])
+
+
+        # files and folders
+        self.samples_file = os.path.join(self.datafolder, self.day, self.day + "_SAMPLES.csv")
+        self.figures_individual_folder = os.path.join(self.datafolder, self.day, "figures", "individual")
+        self.figures_compiled_folder = os.path.join(self.datafolder, self.day, "figures", "compiled")
+        self.masterfile = os.path.join(self.datafolder, self.day, "_" + self.day + "_MASTER.csv")
+        self.summaryfile = os.path.join(self.datafolder, self.day, "_" + self.day + "_SUMMARY.csv")
+        self.samplefile_cleaned = os.path.join(self.datafolder, self.day, "_" + self.day + "_SAMPLE_cleaned.csv")
+        self.logfile = os.path.join(self.datafolder, self.day, "_" + self.day + "_log.csv")
 
         self.eventColors = {
             "BIC": "#000000",
@@ -113,7 +122,9 @@ class MyGraphs:
             "dtotalCO2dt_chl": "#000000",
             "enrichrate47_chl": "#0064FA",
             "enrichrate49_chl": "#6400FA",
-            "cat": "#6400FA"
+            "cat": "#6400FA",
+            "AF": "#e330d7",
+            "dAFdt": "#e330d7"
         }
 
         self.units = {
@@ -159,8 +170,67 @@ class MyGraphs:
         self.sample_list()
 
         # Create master file
-
         self.create_masterdf(derive=derive, denoise=denoise, norm_chl=norm_chl)
+
+    def extract_values(self, s):
+        df = self.dfs[s]
+
+        nc, inj_peak, dark1_steady, light_high, light_low, light_steady, dark2_high, dark2_low = -1,-1,-1,-1,-1,-1,-1,-1
+
+        if not os.path.isdir(os.path.join(self.datafolder, self.day, 'results')):
+            os.makedirs(os.path.join(self.datafolder, self.day, 'results'))
+
+        for _, r in df.loc[df.eventtype.isin(self.eventColors.keys()),
+                           ['time', 'eventtype']].iterrows():
+
+            if r['eventtype'] == 'CELLS':
+                # non catalytic = just before cell injection
+                nc = df.loc[(df.time >= (r['time']-10)) & (df.time < r['time']-3), 'enrichrate49'].mean()
+
+                # injection_peak = minimum for 100 seconds after injection
+                inj_peak = df.loc[(df.time >= (r['time'])) & (df.time < r['time']+100), 'enrichrate49'].min()
+
+            elif r['eventtype'] == 'LIGHT ON':
+                # steady rate in the dark before light on
+                dark1_steady = df.loc[(df.time >= (r['time']-10)) & (df.time < r['time']-3), 'enrichrate49'].mean()
+                light_on = r['time']
+
+            elif r['eventtype'] == 'LIGHT OFF':
+                # peaks at light rate in the dark before light on
+                if light_on is not None and light_on > 0:
+                    light_high = df.loc[(df.time >= light_on) & (df.time < r['time']-3), 'enrichrate49'].max()
+                    light_low = df.loc[(df.time >= light_on) & (df.time < r['time']-3), 'enrichrate49'].min()
+                else:
+                    light_high, light_low = 0, 0
+
+                light_steady = df.loc[(df.time >= r['time']-10) & (df.time < r['time']-3), 'enrichrate49'].mean()
+                dark2_high = df.loc[(df.time >= r['time']) & (df.time < r['time']+150), 'enrichrate49'].min()
+                dark2_low = df.loc[(df.time >= r['time']) & (df.time < r['time']+150), 'enrichrate49'].min()
+
+        newrow = [s,
+                  nc,
+                  inj_peak,
+                  dark1_steady,
+                  light_high,
+                  light_low,
+                  light_steady,
+                  dark2_high,
+                  dark2_low]
+
+        self.extracted_values.loc[len(self.extracted_values.index), :] = newrow
+
+        # print('\n', os.path.split(s)[-1])
+        # print(' > nc=', nc)
+        # print(' > inj_peak=', inj_peak)
+        # print(' > dark_steady=', dark1_steady)
+        # print(' > light_high=', light_high)
+        # print(' > light_low=', light_low)
+        # print(' > dark2_high=', dark2_high)
+        # print(' > dark2_low=', dark2_low)
+        return
+
+
+
 
     def sample_list(self):
         """
@@ -259,6 +329,7 @@ class MyGraphs:
                 masterdf = pd.DataFrame()
 
                 for s in self.samples.index:
+                    print("  ", s)
                     # if os.path.getsize(self.samples.ix[s, 'datafile']) >= 10000000:
                     #     print("File ", self.samples.ix[s, 'datafile'], " is more than 10 Mo... Excluding it")
                     # else:
@@ -287,6 +358,10 @@ class MyGraphs:
                     # save modified file
                     self.dfs[s].to_csv(self.samples.ix[s, 'datafile'], index=False, encoding=self.encoding)
 
+                    # extract peak values
+                    # self.extract_values(s)
+                    # self.extracted_values.set_index('sample').join(self.samples).to_csv(os.path.join(self.datafolder, self.day, 'results', 'peak_data.csv'))
+
                     # concat dataframes
                     masterdf = pd.concat([masterdf, self.dfs[s]])
 
@@ -300,7 +375,6 @@ class MyGraphs:
                 self.summarydf.to_csv(self.summaryfile, index=False, encoding=self.encoding)
                 self.log("SUMMARY file", "Created " + self.summaryfile)
                 summarydf = None
-
 
             else:
                 print(self.masterfile, " exists")
@@ -327,8 +401,11 @@ class MyGraphs:
             df.loc[:, 'd' + str(m) + 'dt'] = self.rolling_linear_reg(df[self.timecol], df['Mass' + str(m)])
 
         df.loc[:, 'dtotalCO2dt'] = df.d44dt + df.d45dt + df.d46dt + df.d47dt + df.d49dt
-        df.loc[:, 'enrichrate47'] = self.rolling_linear_reg(df[self.timecol], df.logE47)  # (per second)
-        df.loc[:, 'enrichrate49'] = self.rolling_linear_reg(df[self.timecol], df.logE49)  # (per second)
+        if 'logE47' in df.columns:
+            df.loc[:, 'enrichrate47'] = self.rolling_linear_reg(df[self.timecol], df.logE47)  # (per second)
+
+        if 'logE49' in df.columns:
+            df.loc[:, 'enrichrate49'] = self.rolling_linear_reg(df[self.timecol], df.logE49)  # (per second)
 
         return df
 
@@ -451,7 +528,6 @@ class MyGraphs:
             cells_inj = self.dfs[s].loc[self.dfs[s].eventtype == 'CELLS', 'time'].values[0]
             nc = self.dfs[s].loc[(self.dfs[s].time >= (cells_inj - 10)) & (self.dfs[s].time < cells_inj - 3), i].mean()
             self.dfs[s][i + "_chl"] = (self.dfs[s][i] - nc) / chl
-            print(s, i, 'NC=', nc)
 
     def align_event(self, df, event):
         """
@@ -563,7 +639,7 @@ class MyGraphs:
                     # annotate
                     if self.annotate:
                         t = data.loc[
-                            data.eventtype.notnull(), [self.timecol, 'eventtype', 'eventdetails', 'echant']]
+                            data.eventtype.isin(self.eventColors.keys()), [self.timecol, 'eventtype', 'eventdetails', 'echant']]
                         for e in t[self.timecol]:
                             etime, etype, edetails = t.loc[t[self.timecol] == e, :][self.timecol].values[0], \
                                                      t.loc[t[self.timecol] == e, :].eventtype.values[0], \
@@ -685,30 +761,34 @@ class MyGraphs:
                 self.ymax_graph = self.ymax
 
             for i, w in enumerate(what):
-                if w in self.dfs[s].columns:
+                if w in self.dfs[s].columns and w in self.curveColors:
                     tmp = self.dfs[s].loc[
                           (self.dfs[s][self.timecol] > subset_limits[0]) & (
                           self.dfs[s][self.timecol] < subset_limits[1]), :]
 
-                # create plot
-                ax[w] = self.dfs[s].set_index(self.timecol)[w].plot(lw=self.linewidth,
-                                                                    c=self.curveColors[w],
-                                                                    ls='-',
-                                                                    alpha=1.0,
-                                                                    label=str(w))
-
-                if w in self.dfs[s].columns and len(what) == 1 and show_noisy:
-                    ax[w] = self.dfs[s].set_index(self.timecol)[w].plot(lw=self.linewidth,
+                    # create plot
+                    ax[w] = tmp.set_index(self.timecol)[w].plot(lw=self.linewidth,
                                                                         c=self.curveColors[w],
                                                                         ls='-',
-                                                                        alpha=0.3,
+                                                                        alpha=1.0,
                                                                         label=str(w))
+                elif w not in self.df[s].columns:
+                    print('ERROR: ', w, 'not found in self.dfs[', s, ']')
+                elif w not in self.curveColors:
+                    print('ERROR: ', w, 'not found in self.curvecolors')
+
+                    # if len(what) == 1 and show_noisy:
+                    #     ax[w] = tmp.set_index(self.timecol)[w].plot(lw=self.linewidth,
+                    #                                                         c=self.curveColors[w],
+                    #                                                         ls='-',
+                    #                                                         alpha=0.3,
+                    #                                                         label=str(w))
 
                 # annotate
                 if self.annotate:
                     if i == len(what) - 1:
                         t = self.dfs[s].loc[
-                            self.dfs[s].eventtype.notnull(), [self.timecol, 'eventtype', 'eventdetails', 'echant']]
+                            self.dfs[s].eventtype.isin(self.eventColors.keys()), [self.timecol, 'eventtype', 'eventdetails', 'echant']]
                         for e in t[self.timecol]:
                             etime, etype, edetails = t.loc[t[self.timecol] == e, :][self.timecol].values[0], \
                                                      t.loc[t[self.timecol] == e, :].eventtype.values[0], \
